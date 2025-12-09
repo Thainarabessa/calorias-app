@@ -1,93 +1,166 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
-<title>Controle de Calorias</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-body{font-family:Arial;background:#f6f6f6;padding:16px}
-h1{color:#ff4d88}
-label{display:block;margin-top:12px;font-weight:700}
-select,input,button{width:100%;padding:8px;margin-top:4px}
-button{background:#ff4d88;color:#fff;border:0;border-radius:6px;margin-top:16px}
-.card{background:#fff;padding:16px;border-radius:8px}
-</style>
+  <meta charset="UTF-8">
+  <title>Controle de Calorias</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      background: #f6f6f6;
+      padding: 16px;
+      margin: 0;
+    }
+    h1 {
+      color: #ff4d88;
+      margin-bottom: 10px;
+    }
+    .card {
+      background: #ffffff;
+      padding: 16px;
+      border-radius: 8px;
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      margin-top: 12px;
+      font-weight: bold;
+    }
+    select, input, button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 4px;
+      font-size: 16px;
+    }
+    button {
+      background: #ff4d88;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      margin-top: 16px;
+    }
+  </style>
 </head>
+
 <body>
 
-<h1>🍎 Calorias</h1>
+<h1>🍎 Controle de Calorias</h1>
 
+<!-- RESUMO DIÁRIO -->
 <div class="card">
-<label>Data</label>
-<input type="date" id="data">
+  <strong>Total do dia:</strong> 1510 kcal<br><br>
+  ✅ Consumidas: <strong><span id="consumidas">0</span></strong> kcal<br>
+  🔥 Restantes: <strong><span id="restantes">1510</span></strong> kcal
+</div>
 
-<label>Refeição</label>
-<select id="refeicao">
-<option>Café da manhã</option>
-<option>Almoço</option>
-<option>Lanche</option>
-<option>Janta</option>
-</select>
+<!-- FORMULÁRIO -->
+<div class="card">
+  <label>Data</label>
+  <input type="date" id="data">
 
-<label>Categoria</label>
-<select id="categoria"></select>
+  <label>Refeição</label>
+  <select id="refeicao">
+    <option>Café da manhã</option>
+    <option>Almoço</option>
+    <option>Lanche</option>
+    <option>Janta</option>
+  </select>
 
-<label>Alimento</label>
-<select id="alimento"></select>
+  <label>Categoria</label>
+  <select id="categoria"></select>
 
-<label>Quantidade</label>
-<input type="number" id="qtd">
+  <label>Alimento</label>
+  <select id="alimento"></select>
 
-<button>Salvar</button>
+  <label>Quantidade</label>
+  <input type="number" id="qtd" placeholder="Ex: 150">
+
+  <button onclick="salvar()">Salvar</button>
 </div>
 
 <script>
-const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
-const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
+  const TOTAL_DIARIO = 1510;
+  let caloriasConsumidasHoje = 0;
 
-let bd = [];
+  const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
+  const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
 
-fetch(URL)
-.then(r=>r.text())
-.then(t=>{
- const j = JSON.parse(t.substring(47).slice(0,-2));
- const rows = j.table.rows;
+  let bd = [];
 
- bd = rows.map(r=>({
-   descricao: r.c[0]?.v || "",
-   calorias: Number(r.c[1]?.v) || 0,
-   peso: Number(r.c[2]?.v) || 0,
-   unidade: r.c[3]?.v || "",
-   tipo: r.c[4]?.v || ""
- })).filter(x=>x.descricao);
+  fetch(URL)
+    .then(r => r.text())
+    .then(t => {
+      const j = JSON.parse(t.substring(47).slice(0, -2));
+      const rows = j.table.rows;
 
- carregarCategorias();
-});
+      bd = rows.map(r => ({
+        descricao: r.c[0]?.v || "",
+        calorias: Number(r.c[1]?.v) || 0,
+        peso: Number(r.c[2]?.v) || 0,
+        unidade: r.c[3]?.v || "",
+        tipo: r.c[4]?.v || ""
+      })).filter(x => x.descricao);
 
-function carregarCategorias(){
- const s = document.getElementById("categoria");
- s.innerHTML="";
- [...new Set(bd.map(x=>x.tipo))].forEach(t=>{
-  const o=document.createElement("option");
-  o.text=t;
-  s.add(o);
- });
- s.onchange=carregarAlimentos;
- carregarAlimentos();
-}
+      carregarCategorias();
+    });
 
-function carregarAlimentos(){
- const cat=document.getElementById("categoria").value;
- const s=document.getElementById("alimento");
- s.innerHTML="";
- bd.filter(x=>x.tipo===cat).forEach(a=>{
-  const o=document.createElement("option");
-  o.text=a.descricao+" ("+a.unidade+")";
-  s.add(o);
- });
-}
+  function carregarCategorias() {
+    const select = document.getElementById("categoria");
+    select.innerHTML = "";
 
-document.getElementById("data").valueAsDate=new Date();
+    [...new Set(bd.map(a => a.tipo))].forEach(tipo => {
+      const opt = document.createElement("option");
+      opt.text = tipo;
+      select.add(opt);
+    });
+
+    select.onchange = carregarAlimentos;
+    carregarAlimentos();
+  }
+
+  function carregarAlimentos() {
+    const categoria = document.getElementById("categoria").value;
+    const select = document.getElementById("alimento");
+    select.innerHTML = "";
+
+    bd.filter(a => a.tipo === categoria).forEach(a => {
+      const opt = document.createElement("option");
+      opt.text = `${a.descricao} (${a.unidade})`;
+      select.add(opt);
+    });
+  }
+
+  function salvar() {
+    const qtd = Number(document.getElementById("qtd").value);
+    const alimentoTexto = document.getElementById("alimento").value;
+
+    if (!qtd || qtd <= 0) {
+      alert("Informe uma quantidade válida");
+      return;
+    }
+
+    const alimento = bd.find(a =>
+      alimentoTexto.startsWith(a.descricao)
+    );
+
+    if (!alimento) {
+      alert("Alimento não encontrado");
+      return;
+    }
+
+    const calorias = qtd * alimento.calorias;
+    caloriasConsumidasHoje += calorias;
+
+    document.getElementById("consumidas").innerText =
+      caloriasConsumidasHoje.toFixed(1);
+
+    document.getElementById("restantes").innerText =
+      (TOTAL_DIARIO - caloriasConsumidasHoje).toFixed(1);
+
+    document.getElementById("qtd").value = "";
+  }
+
+  document.getElementById("data").valueAsDate = new Date();
 </script>
 
 </body>
