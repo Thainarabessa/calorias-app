@@ -1,164 +1,291 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Controle de Calorias</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
-body{font-family:Arial;background:#f6f6f6;padding:16px;margin:0}
-h1{color:#ff4d88}
-.card{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px}
-label{display:block;margin-top:12px;font-weight:bold}
-select,input,button{width:100%;padding:8px;margin-top:4px;font-size:16px}
-button{background:#ff4d88;color:white;border:none;border-radius:6px;margin-top:16px}
-.resumo p {margin:6px 0;}
-hr {margin:10px 0;}
+  body {
+    font-family: Arial, sans-serif;
+    background: #f6f6f6;
+    padding: 16px;
+    margin: 0;
+  }
+  h1 {
+    color: #ff4d88;
+    text-align: center;
+  }
+  .card {
+    background: #fff;
+    padding: 16px;
+    border-radius: 8px;
+    margin-bottom: 16px;
+  }
+  label {
+    display: block;
+    margin-top: 12px;
+    font-weight: bold;
+  }
+  select, input, button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 4px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+  button {
+    background: #ff4d88;
+    color: white;
+    border: none;
+    margin-top: 16px;
+    cursor: pointer;
+  }
+  button:hover {
+    background: #e03e73;
+  }
+  .resumo p {
+    margin: 6px 0;
+  }
+  hr {
+    margin: 10px 0;
+  }
 </style>
 </head>
-
 <body>
 
 <h1>🍎 Controle de Calorias</h1>
 
 <div class="card resumo">
   <p><strong>Total diário:</strong> 1510 kcal</p>
-  <p>✅ Consumidas: <span id="consumidas">0</span></p>
-  <p>🔥 Restantes: <span id="restantes">1510</span></p>
+  <p>✅ Consumidas: <span id="consumidas">0</span> kcal</p>
+  <p>🔥 Restantes: <span id="restantes">1510</span> kcal</p>
   <hr>
   <p>🥩 Proteínas: <span id="prot">0</span> | Faltam: <span id="protFalta">510</span></p>
   <p>🍚 Carboidratos: <span id="carb">0</span> | Faltam: <span id="carbFalta">600</span></p>
   <p>🥑 Gorduras: <span id="gord">0</span> | Faltam: <span id="gordFalta">150</span></p>
   <p>🍎 Frutas: <span id="frutas">0</span> | Faltam: <span id="frutasFalta">250</span></p>
+  <hr>
+  <p>🚫 Fora da dieta: <span id="foraDieta">0</span> kcal</p>
 </div>
 
 <div class="card">
-<label>Data</label>
-<input type="date" id="data">
+  <label>Data</label>
+  <input type="date" id="data" />
 
-<label>Refeição</label>
-<select id="refeicao">
-<option>Café da manhã</option>
-<option>Almoço</option>
-<option>Lanche</option>
-<option>Janta</option>
-</select>
+  <label>Refeição</label>
+  <select id="refeicao">
+    <option>Café da manhã</option>
+    <option>Almoço</option>
+    <option>Lanche</option>
+    <option>Janta</option>
+  </select>
 
-<label>Categoria</label>
-<select id="categoria"></select>
+  <label>Categoria</label>
+  <select id="categoria"></select>
 
-<label>Alimento</label>
-<select id="alimento"></select>
+  <label id="labelAlimento">Alimento</label>
+  <select id="alimento"></select>
 
-<label>Quantidade (em gramas)</label>
-<input type="number" id="qtd" placeholder="Informe a quantidade">
+  <!-- Campos para entrada manual fora da dieta -->
+  <label id="labelNomeManual" style="display:none;">Nome do alimento fora da dieta</label>
+  <input type="text" id="nomeManual" style="display:none;" placeholder="Ex: Bombom" />
 
-<button onclick="salvar()">Salvar</button>
+  <label id="labelCalManual" style="display:none;">Calorias totais (ex: da embalagem)</label>
+  <input type="number" id="calManual" style="display:none;" placeholder="Ex: 150" min="0" />
+
+  <label id="labelQtd">Quantidade (em gramas)</label>
+  <input type="number" id="qtd" placeholder="Ex: 150" min="0" />
+
+  <button onclick="salvar()">Salvar</button>
 </div>
 
 <script>
-const TOTAL_DIARIO = 1510;
-const METAS = {
-  proteina: 510,
-  carbo: 600,
-  gordura: 150,
-  frutas: 250
-};
+  const TOTAL_DIARIO = 1510;
+  const METAS = {
+    proteina: 510,
+    carbo: 600,
+    gordura: 150,
+    frutas: 250
+  };
 
-let total = 0, prot = 0, carb = 0, gordura = 0, frutas = 0;
+  let total = 0;
+  let prot = 0;
+  let carb = 0;
+  let gordura = 0;
+  let frutas = 0;
+  let foraDieta = 0;
 
-const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
-const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
+  const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
+  const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
 
-let bd = [];
+  let bd = [];
 
-function toNumber(v){
-  if(v === null || v === undefined) return 0;
-  if(typeof v === "number") return v;
-  return Number(String(v).replace(",", "."));
-}
-
-fetch(URL)
-.then(r => r.text())
-.then(t => {
-  const j = JSON.parse(t.substring(47).slice(0,-2));
-  const rows = j.table.rows;
-
-  bd = rows.map(r => ({
-    descricao: r.c[0]?.v || "",
-    calorias: toNumber(r.c[1]?.v),
-    peso: toNumber(r.c[2]?.v),
-    unidade: r.c[3]?.v || "",
-    tipo: r.c[4]?.v || ""
-  })).filter(a => a.descricao);
-
-  carregarCategorias();
-});
-
-function carregarCategorias(){
-  const s = document.getElementById("categoria");
-  s.innerHTML = "";
-  [...new Set(bd.map(a => a.tipo))].forEach(t => {
-    const o = document.createElement("option");
-    o.text = t;
-    s.add(o);
-  });
-  s.onchange = carregarAlimentos;
-  carregarAlimentos();
-}
-
-function carregarAlimentos(){
-  const cat = document.getElementById("categoria").value;
-  const s = document.getElementById("alimento");
-  s.innerHTML = "";
-  bd.filter(a => a.tipo === cat).forEach(a => {
-    const o = document.createElement("option");
-    o.text = `${a.descricao} (${a.unidade})`;
-    s.add(o);
-  });
-}
-
-function salvar(){
-  const qtd = Number(document.getElementById("qtd").value);
-  if(!qtd || qtd <= 0){
-    alert("Informe uma quantidade válida");
-    return;
+  // Formata número, converte virgula para ponto
+  function toNumber(v) {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return v;
+    return Number(String(v).replace(",", "."));
   }
 
-  const texto = document.getElementById("alimento").value;
-  const alimento = bd.find(a => texto.startsWith(a.descricao));
+  // Carregar dados da planilha
+  fetch(URL)
+    .then(r => r.text())
+    .then(t => {
+      const j = JSON.parse(t.substring(47).slice(0, -2));
+      const rows = j.table.rows;
 
-  if(!alimento){
-    alert("Alimento não encontrado");
-    return;
+      bd = rows.map(r => ({
+        descricao: r.c[0]?.v || "",
+        calorias: toNumber(r.c[1]?.v),
+        peso: toNumber(r.c[2]?.v),
+        unidade: r.c[3]?.v || "",
+        tipo: r.c[4]?.v || ""
+      })).filter(a => a.descricao);
+
+      carregarCategorias();
+    });
+
+  // Carrega categorias do BD + categoria manual
+  function carregarCategorias() {
+    const s = document.getElementById("categoria");
+    s.innerHTML = "";
+    const tiposUnicos = [...new Set(bd.map(a => a.tipo))];
+
+    tiposUnicos.forEach(t => {
+      const o = document.createElement("option");
+      o.text = t;
+      s.add(o);
+    });
+
+    const opcManual = document.createElement("option");
+    opcManual.text = "FORA DA DIETA";
+    s.add(opcManual);
+
+    s.onchange = () => {
+      carregarAlimentos();
+      toggleInputsManuais();
+    };
+
+    carregarAlimentos();
+    toggleInputsManuais();
   }
 
-  const calorias = qtd * alimento.calorias;
-  total += calorias;
+  // Carrega alimentos conforme categoria (exceto fora da dieta)
+  function carregarAlimentos() {
+    const cat = document.getElementById("categoria").value;
+    const s = document.getElementById("alimento");
+    s.innerHTML = "";
 
-  const tipoUpper = alimento.tipo.toUpperCase();
+    if (cat === "FORA DA DIETA") {
+      s.style.display = "none";
+      document.getElementById("labelAlimento").style.display = "none";
+    } else {
+      s.style.display = "block";
+      document.getElementById("labelAlimento").style.display = "block";
 
-  if(tipoUpper.includes("PROTE")) prot += calorias;
-  if(tipoUpper.includes("CARBO")) carb += calorias;
-  if(tipoUpper.includes("GORD")) gordura += calorias;
-  if(tipoUpper.includes("FRUTA")) frutas += calorias;
+      bd.filter(a => a.tipo === cat).forEach(a => {
+        const o = document.createElement("option");
+        o.text = `${a.descricao} (${a.unidade})`;
+        s.add(o);
+      });
+    }
+  }
 
-  document.getElementById("consumidas").innerText = total.toFixed(1);
-  document.getElementById("restantes").innerText = (TOTAL_DIARIO - total).toFixed(1);
+  // Mostrar/ocultar inputs manuais
+  function toggleInputsManuais() {
+    const cat = document.getElementById("categoria").value;
+    const isManual = (cat === "FORA DA DIETA");
 
-  document.getElementById("prot").innerText = prot.toFixed(1);
-  document.getElementById("carb").innerText = carb.toFixed(1);
-  document.getElementById("gord").innerText = gordura.toFixed(1);
-  document.getElementById("frutas").innerText = frutas.toFixed(1);
+    document.getElementById("nomeManual").style.display = isManual ? "block" : "none";
+    document.getElementById("labelNomeManual").style.display = isManual ? "block" : "none";
 
-  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - prot, 0).toFixed(1);
-  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - carb, 0).toFixed(1);
-  document.getElementById("gordFalta").innerText = Math.max(METAS.gordura - gordura, 0).toFixed(1);
-  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - frutas, 0).toFixed(1);
+    document.getElementById("calManual").style.display = isManual ? "block" : "none";
+    document.getElementById("labelCalManual").style.display = isManual ? "block" : "none";
 
-  document.getElementById("qtd").value = "";
-}
+    document.getElementById("qtd").style.display = isManual ? "none" : "block";
+    document.getElementById("labelQtd").style.display = isManual ? "none" : "block";
+  }
 
-document.getElementById("data").valueAsDate = new Date();
+  // Atualizar campos faltantes e totais no resumo
+  function atualizarResumo() {
+    document.getElementById("consumidas").innerText = total.toFixed(1);
+    document.getElementById("restantes").innerText = Math.max(TOTAL_DIARIO - total, 0).toFixed(1);
+
+    document.getElementById("prot").innerText = prot.toFixed(1);
+    document.getElementById("carb").innerText = carb.toFixed(1);
+    document.getElementById("gord").innerText = gordura.toFixed(1);
+    document.getElementById("frutas").innerText = frutas.toFixed(1);
+    document.getElementById("foraDieta").innerText = foraDieta.toFixed(1);
+
+    document.getElementById("protFalta").innerText = Math.max(METAS.proteina - prot, 0).toFixed(1);
+    document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - carb, 0).toFixed(1);
+    document.getElementById("gordFalta").innerText = Math.max(METAS.gordura - gordura, 0).toFixed(1);
+    document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - frutas, 0).toFixed(1);
+  }
+
+  // Função salvar
+  function salvar() {
+    const categoria = document.getElementById("categoria").value;
+
+    if (categoria === "FORA DA DIETA") {
+      const nomeManual = document.getElementById("nomeManual").value.trim();
+      const calManual = Number(document.getElementById("calManual").value);
+
+      if (!nomeManual) {
+        alert("Informe o nome do alimento fora da dieta.");
+        return;
+      }
+      if (!calManual || calManual <= 0) {
+        alert("Informe uma quantidade válida de calorias.");
+        return;
+      }
+
+      foraDieta += calManual;
+      total += calManual;
+
+      alert(`✅ Salvo fora da dieta!\n${nomeManual}\nCalorias: ${calManual.toFixed(1)} kcal`);
+
+      // Limpa campos manuais
+      document.getElementById("nomeManual").value = "";
+      document.getElementById("calManual").value = "";
+
+    } else {
+      const qtd = Number(document.getElementById("qtd").value);
+      if (!qtd || qtd <= 0) {
+        alert("Informe uma quantidade válida");
+        return;
+      }
+
+      const texto = document.getElementById("alimento").value;
+      const alimento = bd.find(a => texto.startsWith(a.descricao));
+
+      if (!alimento) {
+        alert("Alimento não encontrado");
+        return;
+      }
+
+      const calorias = qtd * alimento.calorias;
+      total += calorias;
+
+      const tipoUpper = alimento.tipo.toUpperCase();
+
+      if (tipoUpper.includes("PROTE")) prot += calorias;
+      if (tipoUpper.includes("CARBO")) carb += calorias;
+      if (tipoUpper.includes("GORD")) gordura += calorias;
+      if (tipoUpper.includes("FRUTA")) frutas += calorias;
+    }
+
+    atualizarResumo();
+
+    // Limpa campo quantidade só para categoria normal
+    if (categoria !== "FORA DA DIETA") {
+      document.getElementById("qtd").value = "";
+    }
+  }
+
+  document.getElementById("data").valueAsDate = new Date();
 </script>
 
 </body>
