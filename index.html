@@ -1,54 +1,21 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
 <meta charset="UTF-8">
 <title>Controle de Calorias</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body{
-  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-  background:#f2f2f2;
-  padding:16px;
-  font-size:18px;
-}
-h1{
-  text-align:center;
-  font-size:26px;
-}
-.card{
-  background:#fff;
-  padding:16px;
-  margin-bottom:16px;
-  border-radius:14px;
-}
-label{
-  display:block;
-  margin-top:12px;
-  font-weight:600;
-}
-select,input,button{
-  width:100%;
-  padding:12px;
-  margin-top:6px;
-  font-size:18px;
-  border-radius:10px;
-  border:1px solid #ccc;
-}
-button{
-  background:#e91e63;
-  color:#fff;
-  border:none;
-  margin-top:20px;
-  font-size:20px;
-}
-.resumo p{
-  margin:6px 0;
-}
-hr{
-  margin:10px 0;
-}
+body{font-family:Arial;background:#f6f6f6;padding:16px;margin:0}
+h1{color:#ff4d88}
+.card{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px}
+label{display:block;margin-top:12px;font-weight:bold}
+select,input,button{width:100%;padding:8px;margin-top:4px;font-size:16px}
+button{background:#ff4d88;color:white;border:none;border-radius:6px;margin-top:16px}
+.resumo p {margin:6px 0;}
+hr {margin:10px 0;}
 </style>
 </head>
+
 <body>
 
 <h1>🍎 Controle de Calorias</h1>
@@ -58,10 +25,10 @@ hr{
   <p>✅ Consumidas: <span id="consumidas">0</span></p>
   <p>🔥 Restantes: <span id="restantes">1510</span></p>
   <hr>
-  <p>🥩 Proteínas: <span id="prot">0</span> | Faltam: <span id="protFalta">0</span></p>
-  <p>🍚 Carboidratos: <span id="carb">0</span> | Faltam: <span id="carbFalta">0</span></p>
-  <p>🥑 Gorduras: <span id="gord">0</span> | Faltam: <span id="gordFalta">0</span></p>
-  <p>🍎 Frutas: <span id="frutas">0</span> | Faltam: <span id="frutasFalta">0</span></p>
+  <p>🥩 Proteínas: <span id="prot">0</span> | Faltam: <span id="protFalta">510</span></p>
+  <p>🍚 Carboidratos: <span id="carb">0</span> | Faltam: <span id="carbFalta">600</span></p>
+  <p>🥑 Gorduras: <span id="gord">0</span> | Faltam: <span id="gordFalta">150</span></p>
+  <p>🍎 Frutas: <span id="frutas">0</span> | Faltam: <span id="frutasFalta">250</span></p>
 </div>
 
 <div class="card">
@@ -70,19 +37,19 @@ hr{
 
 <label>Refeição</label>
 <select id="refeicao">
-  <option>Café da manhã</option>
-  <option>Almoço</option>
-  <option>Lanche</option>
-  <option>Janta</option>
+<option>Café da manhã</option>
+<option>Almoço</option>
+<option>Lanche</option>
+<option>Janta</option>
 </select>
 
 <label>Categoria</label>
-<select id="categoria" onchange="carregarAlimentos()"></select>
+<select id="categoria"></select>
 
 <label>Alimento</label>
 <select id="alimento"></select>
 
-<label id="lblQtd">Quantidade</label>
+<label>Quantidade (em gramas)</label>
 <input type="number" id="qtd" placeholder="Informe a quantidade">
 
 <button onclick="salvar()">Salvar</button>
@@ -90,8 +57,6 @@ hr{
 
 <script>
 const TOTAL_DIARIO = 1510;
-
-// Metas diárias de cada tipo
 const METAS = {
   proteina: 510,
   carbo: 600,
@@ -99,26 +64,19 @@ const METAS = {
   frutas: 250
 };
 
-let total = 0, prot = 0, carb = 0, gord = 0, frutas = 0;
+let total = 0, prot = 0, carb = 0, gordura = 0, frutas = 0;
 
 const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
 const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
 
 let bd = [];
 
-// Data de hoje
-let dataHoje = new Date().toISOString().slice(0,10);
-
-// Histórico do dia
-let historicoHoje = JSON.parse(localStorage.getItem('historico-' + dataHoje)) || [];
-
-// Conversor número seguro
 function toNumber(v){
+  if(v === null || v === undefined) return 0;
   if(typeof v === "number") return v;
-  return Number(String(v).replace(",", ".")) || 0;
+  return Number(String(v).replace(",", "."));
 }
 
-// Carrega planilha
 fetch(URL)
 .then(r => r.text())
 .then(t => {
@@ -127,113 +85,77 @@ fetch(URL)
 
   bd = rows.map(r => ({
     descricao: r.c[0]?.v || "",
-    cal: toNumber(r.c[1]?.v),
+    calorias: toNumber(r.c[1]?.v),
     peso: toNumber(r.c[2]?.v),
-    und: r.c[3]?.v || "",
+    unidade: r.c[3]?.v || "",
     tipo: r.c[4]?.v || ""
   })).filter(a => a.descricao);
 
   carregarCategorias();
-  carregarHistorico();
 });
 
-// Carrega categorias
 function carregarCategorias(){
   const s = document.getElementById("categoria");
   s.innerHTML = "";
   [...new Set(bd.map(a => a.tipo))].forEach(t => {
     const o = document.createElement("option");
-    o.value = t;
-    o.textContent = t;
-    s.appendChild(o);
+    o.text = t;
+    s.add(o);
   });
+  s.onchange = carregarAlimentos;
   carregarAlimentos();
 }
 
-// Carrega alimentos
 function carregarAlimentos(){
-  const tipo = document.getElementById("categoria").value;
+  const cat = document.getElementById("categoria").value;
   const s = document.getElementById("alimento");
   s.innerHTML = "";
-
-  bd.filter(a => a.tipo === tipo).forEach(a => {
+  bd.filter(a => a.tipo === cat).forEach(a => {
     const o = document.createElement("option");
-    o.value = a.descricao;
-    o.textContent = `${a.descricao} (${a.und})`;
-    s.appendChild(o);
+    o.text = `${a.descricao} (${a.unidade})`;
+    s.add(o);
   });
-
-  atualizarUnidade();
 }
 
-// Atualiza label da unidade
-function atualizarUnidade(){
-  const sel = document.getElementById("alimento");
-  if(!sel.options.length) return;
-  const und = sel.options[sel.selectedIndex].text.match(/\((.*?)\)/)?.[1] || "";
-  document.getElementById("lblQtd").innerText = "Quantidade (" + und + ")";
-}
-
-// Salva alimento
 function salvar(){
   const qtd = Number(document.getElementById("qtd").value);
-  const nome = document.getElementById("alimento").value;
-  if(!qtd || qtd <= 0) return alert("Informe quantidade válida");
+  if(!qtd || qtd <= 0){
+    alert("Informe uma quantidade válida");
+    return;
+  }
 
-  const alimento = bd.find(a => a.descricao === nome);
-  if(!alimento) return alert("Alimento não encontrado");
+  const texto = document.getElementById("alimento").value;
+  const alimento = bd.find(a => texto.startsWith(a.descricao));
 
-  const calorias = qtd * alimento.cal;
+  if(!alimento){
+    alert("Alimento não encontrado");
+    return;
+  }
 
-  // Atualiza totais
+  const calorias = qtd * alimento.calorias;
   total += calorias;
+
   const tipoUpper = alimento.tipo.toUpperCase();
+
   if(tipoUpper.includes("PROTE")) prot += calorias;
   if(tipoUpper.includes("CARBO")) carb += calorias;
-  if(tipoUpper.includes("GORD")) gord += calorias;
+  if(tipoUpper.includes("GORD")) gordura += calorias;
   if(tipoUpper.includes("FRUTA")) frutas += calorias;
 
-  // Atualiza histórico
-  historicoHoje.push({
-    data: dataHoje,
-    refeicao: document.getElementById("refeicao").value,
-    tipo: alimento.tipo,
-    descricao: alimento.descricao,
-    qtd: qtd,
-    calorias: calorias
-  });
-  localStorage.setItem('historico-' + dataHoje, JSON.stringify(historicoHoje));
-
-  atualizarResumo();
-  document.getElementById("qtd").value = "";
-}
-
-// Recalcula totais a partir do histórico
-function carregarHistorico(){
-  historicoHoje.forEach(item => {
-    total += item.calorias;
-    const tipoUpper = item.tipo.toUpperCase();
-    if(tipoUpper.includes("PROTE")) prot += item.calorias;
-    if(tipoUpper.includes("CARBO")) carb += item.calorias;
-    if(tipoUpper.includes("GORD")) gord += item.calorias;
-    if(tipoUpper.includes("FRUTA")) frutas += item.calorias;
-  });
-  atualizarResumo();
-}
-
-// Atualiza resumo e metas
-function atualizarResumo(){
   document.getElementById("consumidas").innerText = total.toFixed(1);
   document.getElementById("restantes").innerText = (TOTAL_DIARIO - total).toFixed(1);
+
   document.getElementById("prot").innerText = prot.toFixed(1);
   document.getElementById("carb").innerText = carb.toFixed(1);
-  document.getElementById("gord").innerText = gord.toFixed(1);
+  document.getElementById("gord").innerText = gordura.toFixed(1);
   document.getElementById("frutas").innerText = frutas.toFixed(1);
 
-  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - (prot || 0), 0);
-  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - (carb || 0), 0);
-  document.getElementById("gordFalta").innerText = Math.max(METAS.gord - (gord || 0), 0); // CORRIGIDO
-  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - (frutas || 0), 0);
+  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - prot, 0).toFixed(1);
+  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - carb, 0).toFixed(1);
+  document.getElementById("gordFalta").innerText = Math.max(METAS.gordura - gordura, 0).toFixed(1);
+  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - frutas, 0).toFixed(1);
+
+  document.getElementById("qtd").value = "";
 }
 
 document.getElementById("data").valueAsDate = new Date();
