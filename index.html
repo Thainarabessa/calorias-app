@@ -58,9 +58,10 @@ hr{
   <p>✅ Consumidas: <span id="consumidas">0</span></p>
   <p>🔥 Restantes: <span id="restantes">1510</span></p>
   <hr>
-  <p>🥩 Proteínas: <span id="prot">0</span></p>
-  <p>🍚 Carboidratos: <span id="carb">0</span></p>
-  <p>🥑 Gorduras: <span id="gord">0</span></p>
+  <p>🥩 Proteínas: <span id="prot">0</span> | Faltam: <span id="protFalta">0</span></p>
+  <p>🍚 Carboidratos: <span id="carb">0</span> | Faltam: <span id="carbFalta">0</span></p>
+  <p>🥑 Gorduras: <span id="gord">0</span> | Faltam: <span id="gordFalta">0</span></p>
+  <p>🍎 Frutas: <span id="frutas">0</span> | Faltam: <span id="frutasFalta">0</span></p>
 </div>
 
 <div class="card">
@@ -89,18 +90,35 @@ hr{
 
 <script>
 const TOTAL_DIARIO = 1510;
-let total = 0, prot = 0, carb = 0, gord = 0;
+
+// Metas diárias de cada tipo
+const METAS = {
+  proteina: 510,
+  carbo: 600,
+  gordura: 150,
+  frutas: 250
+};
+
+let total = 0, prot = 0, carb = 0, gord = 0, frutas = 0;
 
 const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
 const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
 
 let bd = [];
 
+// Data de hoje
+let dataHoje = new Date().toISOString().slice(0,10);
+
+// Histórico do dia
+let historicoHoje = JSON.parse(localStorage.getItem('historico-' + dataHoje)) || [];
+
+// Conversor número seguro
 function toNumber(v){
   if(typeof v === "number") return v;
   return Number(String(v).replace(",", ".")) || 0;
 }
 
+// Carrega planilha
 fetch(URL)
 .then(r => r.text())
 .then(t => {
@@ -116,8 +134,10 @@ fetch(URL)
   })).filter(a => a.descricao);
 
   carregarCategorias();
+  carregarHistorico();
 });
 
+// Carrega categorias
 function carregarCategorias(){
   const s = document.getElementById("categoria");
   s.innerHTML = "";
@@ -130,6 +150,7 @@ function carregarCategorias(){
   carregarAlimentos();
 }
 
+// Carrega alimentos
 function carregarAlimentos(){
   const tipo = document.getElementById("categoria").value;
   const s = document.getElementById("alimento");
@@ -145,6 +166,7 @@ function carregarAlimentos(){
   atualizarUnidade();
 }
 
+// Atualiza label da unidade
 function atualizarUnidade(){
   const sel = document.getElementById("alimento");
   if(!sel.options.length) return;
@@ -152,6 +174,7 @@ function atualizarUnidade(){
   document.getElementById("lblQtd").innerText = "Quantidade (" + und + ")";
 }
 
+// Salva alimento
 function salvar(){
   const qtd = Number(document.getElementById("qtd").value);
   const nome = document.getElementById("alimento").value;
@@ -161,20 +184,56 @@ function salvar(){
   if(!alimento) return alert("Alimento não encontrado");
 
   const calorias = qtd * alimento.cal;
-  total += calorias;
 
+  // Atualiza totais
+  total += calorias;
   const tipoUpper = alimento.tipo.toUpperCase();
   if(tipoUpper.includes("PROTE")) prot += calorias;
   if(tipoUpper.includes("CARBO")) carb += calorias;
   if(tipoUpper.includes("GORD")) gord += calorias;
+  if(tipoUpper.includes("FRUTA")) frutas += calorias;
 
+  // Atualiza histórico
+  historicoHoje.push({
+    data: dataHoje,
+    refeicao: document.getElementById("refeicao").value,
+    tipo: alimento.tipo,
+    descricao: alimento.descricao,
+    qtd: qtd,
+    calorias: calorias
+  });
+  localStorage.setItem('historico-' + dataHoje, JSON.stringify(historicoHoje));
+
+  atualizarResumo();
+  document.getElementById("qtd").value = "";
+}
+
+// Recalcula totais a partir do histórico
+function carregarHistorico(){
+  historicoHoje.forEach(item => {
+    total += item.calorias;
+    const tipoUpper = item.tipo.toUpperCase();
+    if(tipoUpper.includes("PROTE")) prot += item.calorias;
+    if(tipoUpper.includes("CARBO")) carb += item.calorias;
+    if(tipoUpper.includes("GORD")) gord += item.calorias;
+    if(tipoUpper.includes("FRUTA")) frutas += item.calorias;
+  });
+  atualizarResumo();
+}
+
+// Atualiza resumo e metas
+function atualizarResumo(){
   document.getElementById("consumidas").innerText = total.toFixed(1);
   document.getElementById("restantes").innerText = (TOTAL_DIARIO - total).toFixed(1);
   document.getElementById("prot").innerText = prot.toFixed(1);
   document.getElementById("carb").innerText = carb.toFixed(1);
   document.getElementById("gord").innerText = gord.toFixed(1);
+  document.getElementById("frutas").innerText = frutas.toFixed(1);
 
-  document.getElementById("qtd").value = "";
+  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - prot, 0);
+  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - carb, 0);
+  document.getElementById("gordFalta").innerText = Math.max(METAS.gord - gord, 0);
+  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - frutas, 0);
 }
 
 document.getElementById("data").valueAsDate = new Date();
