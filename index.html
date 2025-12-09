@@ -1,58 +1,25 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Controle de Calorias</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- PWA -->
-  <meta name="theme-color" content="#ff4d88">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f7f7f7;
-      margin: 0;
-      padding: 16px;
-    }
-    h1 {
-      color: #ff4d88;
-    }
-    label {
-      display: block;
-      margin-top: 12px;
-    }
-    select, input {
-      width: 100%;
-      padding: 8px;
-      margin-top: 4px;
-    }
-    button {
-      margin-top: 16px;
-      background: #ff4d88;
-      color: white;
-      border: none;
-      padding: 12px;
-      width: 100%;
-      font-size: 16px;
-      border-radius: 6px;
-    }
-    .card {
-      background: white;
-      padding: 12px;
-      margin-top: 16px;
-      border-radius: 8px;
-    }
+    body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;margin:0;padding:16px}
+    h1{color:#ff4d88;margin-bottom:6px}
+    label{display:block;margin-top:12px;font-weight:700}
+    select,input{width:100%;padding:8px;margin-top:4px}
+    button{margin-top:16px;background:#ff4d88;color:#fff;border:none;padding:12px;width:100%;font-size:16px;border-radius:6px}
+    .card{background:#fff;padding:16px;border-radius:8px;margin-top:16px}
   </style>
 </head>
-
 <body>
   <h1>🍎 Controle de Calorias</h1>
+  <p>Versão com detecção automática das colunas do BD</p>
 
   <div class="card">
     <label>Data</label>
     <input type="date" id="data">
-
     <label>Refeição</label>
     <select id="refeicao">
       <option>Café da manhã</option>
@@ -60,16 +27,12 @@
       <option>Lanche</option>
       <option>Janta</option>
     </select>
-
     <label>Categoria</label>
     <select id="categoria"></select>
-
     <label>Alimento</label>
     <select id="alimento"></select>
-
     <label>Quantidade</label>
     <input type="number" id="quantidade" placeholder="Ex: 150">
-
     <button onclick="salvar()">Salvar consumo</button>
   </div>
 
@@ -77,25 +40,117 @@
     const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
     const BD_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
 
-    let bd = [];
+    let bd = []; // array de objetos: {descricao, categoria, cal_por_unidade, unidade, porcao}
+    let headerMap = {}; // nome_normalizado -> index
+
+    // normalize: remove acentos, espaços e coloca em lowercase
+    function normalizeLabel(s){
+      if(!s && s !== 0) return "";
+      return String(s)
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '') // remove acentos
+        .replace(/\s+/g, '')
+        .replace(/[^a-z0-9_]/g,''); // remove chars estranhos
+    }
+
+    // tenta parsear número independentemente de vírgula/ponto
+    function parseNumberFlexible(val){
+      if(val === null || val === undefined) return NaN;
+      if(typeof val === 'number') return val;
+      const s = String(val).trim();
+      if(s === '') return NaN;
+      // se tiver vírgula e ponto, tentar quitar milhares (ex: 1.234,56)
+      if(s.indexOf(',')>-1 && s.indexOf('.')>-1){
+        // assume formato pt-BR: remove pontos, troca vírgula por ponto
+        return parseFloat(s.replace(/\./g,'').replace(',', '.'));
+      }
+      // se só vírgula
+      if(s.indexOf(',')>-1){
+        return parseFloat(s.replace(',', '.'));
+      }
+      return parseFloat(s);
+    }
+
+    // busca a coluna pelo conjunto de possíveis nomes
+    function findHeaderIndex(possibles){
+      for(const p of possibles){
+        const np = normalizeLabel(p);
+        if(np in headerMap) return headerMap[np];
+      }
+      return -1;
+    }
 
     fetch(BD_URL)
-      .then(res => res.text())
+      .then(r => r.text())
       .then(text => {
-        const json = JSON.parse(text.substring(47).slice(0, -2));
-        bd = json.table.rows.map(r => ({
-          descricao: r.c[0]?.v,
-          categoria: r.c[1]?.v,
-          cal: r.c[2]?.v
-        }));
+        // remover cabeçalho do Gviz
+        const json = JSON.parse(text.substring(47).slice(0,-2));
+        const cols = json.table.cols || [];
+        // montar headerMap
+        headerMap = {};
+        cols.forEach((c,i) => {
+          const label = c.label || '';
+          headerMap[normalizeLabel(label)] = i;
+        });
+
+        // possíveis nomes (port/eng) para cada campo
+        const descricaoCandidates = ['descricao','descrição','descricaoalimento','alimento','nome','description','item'];
+        const categoriaCandidates = ['categoria','tipo','classificacao','type','category'];
+        const calCandidates = ['caloriasporgrama','caloriaporgrama','calorias','caloria','calorias_g','cal_por_g','caloriaporunidade','caloriasunidade','calporunidade','cal'];
+        const unidadeCandidates = ['unidade','unidade_medida','unidadedemedida','unit','unidad','medida'];
+        const porcaoCandidates = ['peso_porcao','pesoporcao','peso_da_porção','porcao','porcao_peso','porcao_gramas'];
+
+        const idxDesc = findHeaderIndex(descricaoCandidates);
+        const idxCat = findHeaderIndex(categoriaCandidates);
+        const idxCal = findHeaderIndex(calCandidates);
+        const idxUni = findHeaderIndex(unidadeCandidates);
+        const idxPorc = findHeaderIndex(porcaoCandidates);
+
+        // montar bd
+        bd = (json.table.rows || []).map(r => {
+          const cell = i => r.c && r.c[i] ? r.c[i] : null;
+          // preferir .v (valor) quando possível, senão usar .f (formatado)
+          const getVal = i => {
+            const c = cell(i);
+            if(!c) return null;
+            if(c.v !== undefined && c.v !== null) return c.v;
+            if(c.f !== undefined && c.f !== null) return c.f;
+            return null;
+          };
+
+          const descricao = idxDesc >= 0 ? String(getVal(idxDesc) || '') : '';
+          const categoria = idxCat >= 0 ? String(getVal(idxCat) || '') : '';
+          let cal_raw = idxCal >= 0 ? getVal(idxCal) : null;
+          // se cal_raw for string formatada com vírgula, parsear
+          const cal_por_unidade = parseNumberFlexible(cal_raw);
+          const unidade = idxUni >= 0 ? String(getVal(idxUni) || '') : '';
+          const porcao = idxPorc >= 0 ? parseNumberFlexible(getVal(idxPorc)) : NaN;
+
+          return {
+            descricao: descricao,
+            categoria: categoria,
+            cal_por_unidade: isNaN(cal_por_unidade) ? null : cal_por_unidade,
+            unidade: unidade,
+            porcao: isNaN(porcao) ? null : porcao
+          };
+        }).filter(x => x.descricao); // ignorar linhas em branco
 
         carregarCategorias();
+      })
+      .catch(err => {
+        console.error(err);
+        alert("Erro ao carregar BD. Veja console do navegador para detalhes.");
       });
 
-    function carregarCategorias() {
-      const categorias = [...new Set(bd.map(i => i.categoria))];
+    function carregarCategorias(){
       const catSelect = document.getElementById("categoria");
       catSelect.innerHTML = "";
+      const categorias = [...new Set(bd.map(i => (i.categoria||'').trim()).filter(Boolean))];
+      if(categorias.length === 0){
+        // fallback: se não houver categoria, agrupar tudo em "Alimento"
+        categorias.push('Alimento');
+      }
       categorias.forEach(c => {
         const o = document.createElement("option");
         o.text = c;
@@ -105,19 +160,44 @@
       carregarAlimentos();
     }
 
-    function carregarAlimentos() {
+    function carregarAlimentos(){
       const cat = document.getElementById("categoria").value;
       const aliSelect = document.getElementById("alimento");
       aliSelect.innerHTML = "";
-      bd.filter(i => i.categoria === cat).forEach(a => {
+      const list = bd.filter(i => {
+        if(!cat) return true;
+        // comparar sem acento / case-insensitive
+        const a = normalizeLabel(i.categoria||'');
+        const b = normalizeLabel(cat||'');
+        return a === b;
+      });
+      if(list.length === 0 && bd.length>0){
+        // se não encontrou alimentos pela categoria, mostrar todos como fallback
+        list.push(...bd);
+      }
+      list.forEach(a => {
         const o = document.createElement("option");
-        o.text = a.descricao;
+        o.text = a.descricao + (a.unidade ? ` (${a.unidade})` : '');
         aliSelect.add(o);
       });
     }
 
-    function salvar() {
-      alert("Consumo registrado localmente ✅\n(No próximo passo ligamos ao histórico real)");
+    function salvar(){
+      const data = document.getElementById("data").value;
+      const refeicao = document.getElementById("refeicao").value;
+      const categoria = document.getElementById("categoria").value;
+      const alimentoText = document.getElementById("alimento").value;
+      const quantidade = document.getElementById("quantidade").value;
+
+      // mostrar preview simples (depois ligamos ao histórico)
+      alert(
+        "✅ Registro salvo (simulação)\n\n" +
+        "Data: " + data + "\n" +
+        "Refeição: " + refeicao + "\n" +
+        "Categoria: " + categoria + "\n" +
+        "Alimento: " + alimentoText + "\n" +
+        "Quantidade: " + quantidade
+      );
     }
 
     document.getElementById("data").valueAsDate = new Date();
