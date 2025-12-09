@@ -230,10 +230,10 @@ function atualizarResumo(){
   document.getElementById("gord").innerText = gord.toFixed(1);
   document.getElementById("frutas").innerText = frutas.toFixed(1);
 
-  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - prot, 0);
-  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - carb, 0);
-  document.getElementById("gordFalta").innerText = Math.max(METAS.gord - gord, 0);
-  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - frutas, 0);
+  document.getElementById("protFalta").innerText = Math.max(METAS.proteina - (prot || 0), 0);
+  document.getElementById("carbFalta").innerText = Math.max(METAS.carbo - (carb || 0), 0);
+  document.getElementById("gordFalta").innerText = Math.max(METAS.gord - (gord || 0), 0); // CORRIGIDO
+  document.getElementById("frutasFalta").innerText = Math.max(METAS.frutas - (frutas || 0), 0);
 }
 
 document.getElementById("data").valueAsDate = new Date();
