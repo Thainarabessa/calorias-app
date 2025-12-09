@@ -1,122 +1,129 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-<meta charset="UTF-8">
-<title>Controle de Calorias</title>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<style>
-body{font-family:Arial;background:#f6f6f6;padding:16px;margin:0}
-h1{color:#ff4d88}
-.card{background:#fff;padding:16px;border-radius:8px;margin-bottom:16px}
-label{display:block;margin-top:12px;font-weight:bold}
-select,input,button{width:100%;padding:8px;margin-top:4px;font-size:16px}
-button{background:#ff4d88;color:white;border:none;border-radius:6px;margin-top:16px}
-</style>
+  <meta charset="UTF-8">
+  <title>Calorias App</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 20px;
+    }
+    h1 {
+      text-align: center;
+    }
+    .card {
+      background: #fff;
+      padding: 15px;
+      margin-bottom: 15px;
+      border-radius: 8px;
+    }
+    label {
+      display: block;
+      margin-top: 10px;
+    }
+    select, input, button {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+    button {
+      background: #e91e63;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      font-size: 16px;
+      margin-top: 15px;
+    }
+  </style>
 </head>
 
 <body>
 
 <h1>🍎 Controle de Calorias</h1>
 
+<!-- RESUMO -->
 <div class="card">
-<strong>Total do dia:</strong> 1510 kcal<br><br>
-✅ Consumidas: <strong><span id="consumidas">0</span></strong> kcal<br>
-🔥 Restantes: <strong><span id="restantes">1510</span></strong> kcal
+  <strong>Total diário:</strong> 1510 kcal<br><br>
+  ✅ Consumidas: <strong><span id="consumidas">0</span></strong> kcal<br>
+  🔥 Restantes: <strong><span id="restantes">1510</span></strong> kcal
 </div>
 
+<!-- FORMULÁRIO -->
 <div class="card">
-<label>Data</label>
-<input type="date" id="data">
+  <label>Tipo de alimento</label>
+  <select id="categoria" onchange="carregarAlimentos()">
+    <option value="">Selecione</option>
+  </select>
 
-<label>Refeição</label>
-<select id="refeicao">
-<option>Café da manhã</option>
-<option>Almoço</option>
-<option>Lanche</option>
-<option>Janta</option>
-</select>
+  <label>Alimento</label>
+  <select id="alimento"></select>
 
-<label>Categoria</label>
-<select id="categoria"></select>
+  <label>Quantidade (gramas)</label>
+  <input type="number" id="qtd" placeholder="Ex: 100">
 
-<label>Alimento</label>
-<select id="alimento"></select>
-
-<label>Quantidade (em gramas)</label>
-<input type="number" id="qtd" placeholder="Ex: 150">
-
-<button onclick="salvar()">Salvar</button>
+  <button onclick="salvar()">Salvar</button>
 </div>
 
 <script>
+/* CONFIGURAÇÃO */
 const TOTAL_DIARIO = 1510;
 let caloriasConsumidasHoje = 0;
-
-const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
-const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
-
 let bd = [];
 
-function toNumber(v){
-  if(v === null || v === undefined) return 0;
-  if(typeof v === "number") return v;
-  return Number(String(v).replace(",", "."));
-}
+/* BUSCAR DADOS DO GOOGLE SHEETS */
+fetch("https://opensheet.elk.sh/1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif/BD")
+  .then(res => res.json())
+  .then(dados => {
+    bd = dados.map(l => ({
+      descricao: l["descrição"],
+      calorias: Number(l["calorias por grama"]),
+      peso: l["peso"],
+      und: l["und"],
+      tipo: l["tipo"]
+    }));
 
-fetch(URL)
-.then(r => r.text())
-.then(t => {
-  const j = JSON.parse(t.substring(47).slice(0,-2));
-  const rows = j.table.rows;
+    carregarCategorias();
+  });
 
-  bd = rows.map(r => ({
-    descricao: r.c[0]?.v || "",
-    calorias: toNumber(r.c[1]?.v),
-    peso: toNumber(r.c[2]?.v),
-    unidade: r.c[3]?.v || "",
-    tipo: r.c[4]?.v || ""
-  })).filter(a => a.descricao);
-
-  carregarCategorias();
-});
-
+/* CATEGORIAS */
 function carregarCategorias(){
-  const s = document.getElementById("categoria");
-  s.innerHTML = "";
-  [...new Set(bd.map(a => a.tipo))].forEach(t => {
-    const o = document.createElement("option");
-    o.text = t;
-    s.add(o);
+  const categorias = [...new Set(bd.map(a => a.tipo))];
+  const select = document.getElementById("categoria");
+  categorias.forEach(c => {
+    const opt = document.createElement("option");
+    opt.value = c;
+    opt.textContent = c;
+    select.appendChild(opt);
   });
-  s.onchange = carregarAlimentos;
-  carregarAlimentos();
 }
 
+/* ALIMENTOS */
 function carregarAlimentos(){
-  const cat = document.getElementById("categoria").value;
-  const s = document.getElementById("alimento");
-  s.innerHTML = "";
-  bd.filter(a => a.tipo === cat).forEach(a => {
-    const o = document.createElement("option");
-    o.text = `${a.descricao} (${a.unidade})`;
-    s.add(o);
+  const categoria = document.getElementById("categoria").value;
+  const select = document.getElementById("alimento");
+  select.innerHTML = "";
+
+  bd.filter(a => a.tipo === categoria).forEach(a => {
+    const opt = document.createElement("option");
+    opt.textContent = a.descricao + " (" + a.und + ")";
+    select.appendChild(opt);
   });
 }
 
+/* SALVAR */
 function salvar(){
+  const categoria = document.getElementById("categoria").value;
   const qtd = Number(document.getElementById("qtd").value);
-  if(!qtd || qtd <= 0){
-    alert("Informe uma quantidade válida");
+  const index = document.getElementById("alimento").selectedIndex;
+
+  if(!categoria || index < 0 || !qtd || qtd <= 0){
+    alert("Preencha todos os campos corretamente");
     return;
   }
 
-  const texto = document.getElementById("alimento").value;
-  const alimento = bd.find(a => texto.startsWith(a.descricao));
-
-  if(!alimento){
-    alert("Alimento não encontrado");
-    return;
-  }
+  const alimentosFiltrados = bd.filter(a => a.tipo === categoria);
+  const alimento = alimentosFiltrados[index];
 
   const calorias = qtd * alimento.calorias;
   caloriasConsumidasHoje += calorias;
@@ -129,12 +136,12 @@ function salvar(){
 
   document.getElementById("qtd").value = "";
 
-  alert(`✅ Salvo!
-${alimento.descricao}
-Calorias: ${calorias.toFixed(1)} kcal`);
+  alert(
+    "✅ Salvo!\n\n" +
+    alimento.descricao +
+    "\nCalorias: " + calorias.toFixed(1) + " kcal"
+  );
 }
-
-document.getElementById("data").valueAsDate = new Date();
 </script>
 
 </body>
