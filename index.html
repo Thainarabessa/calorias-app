@@ -1,21 +1,29 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <title>Controle de Calorias</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body{font-family:Arial,Helvetica,sans-serif;background:#f7f7f7;margin:0;padding:16px}
     h1{color:#ff4d88;margin-bottom:6px}
+    small.info{display:block;margin-top:4px;color:#666}
     label{display:block;margin-top:12px;font-weight:700}
     select,input{width:100%;padding:8px;margin-top:4px}
-    button{margin-top:16px;background:#ff4d88;color:#fff;border:none;padding:12px;width:100%;font-size:16px;border-radius:6px}
+    button{margin-top:16px;background:#ff4d88;color:white;border:none;padding:12px;width:100%;font-size:16px;border-radius:6px}
     .card{background:#fff;padding:16px;border-radius:8px;margin-top:16px}
+    .debug{margin-top:10px;color:#333;font-size:13px}
+    .sheet-badge{background:#eee;padding:6px 10px;border-radius:20px;display:inline-block;margin-top:8px}
   </style>
 </head>
 <body>
   <h1>🍎 Controle de Calorias</h1>
-  <p>Versão com detecção automática das colunas do BD</p>
+  <small class="info">App lendo sua planilha — versão de detecção automática</small>
+
+  <div id="status" class="card">
+    <div>Planilha usada: <span id="sheetName" class="sheet-badge">carregando...</span></div>
+    <div id="statusMsg" class="debug"></div>
+  </div>
 
   <div class="card">
     <label>Data</label>
@@ -36,171 +44,199 @@
     <button onclick="salvar()">Salvar consumo</button>
   </div>
 
-  <script>
-    const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
-    const BD_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
+<script>
+const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
 
-    let bd = []; // array de objetos: {descricao, categoria, cal_por_unidade, unidade, porcao}
-    let headerMap = {}; // nome_normalizado -> index
+// lista de nomes de aba comuns para tentar (ordem: preferidos)
+const SHEET_CANDIDATES = [
+  "BD","BD_ALIMENTOS","BD Alimentos","BD-Alimentos","Alimentos","BD_ALIMENTO","BD_ALIMENTOS_PRINCIPAL",
+  "BD1","Sheet1","Dados","BD DADOS","BDdados","BD_DADOS","BD_ALIM","BD_ALIMENS","BD_ALIM"
+];
 
-    // normalize: remove acentos, espaços e coloca em lowercase
-    function normalizeLabel(s){
-      if(!s && s !== 0) return "";
-      return String(s)
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '') // remove acentos
-        .replace(/\s+/g, '')
-        .replace(/[^a-z0-9_]/g,''); // remove chars estranhos
+// normalizar label
+function normalizeLabel(s){
+  if(s === null || s === undefined) return "";
+  return String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,'').replace(/[^a-z0-9_]/g,'');
+}
+function parseNumberFlexible(val){
+  if(val === null || val === undefined) return NaN;
+  if(typeof val === 'number') return val;
+  const s = String(val).trim();
+  if(s === '') return NaN;
+  if(s.indexOf(',')>-1 && s.indexOf('.')>-1) return parseFloat(s.replace(/\./g,'').replace(',','.'));
+  if(s.indexOf(',')>-1) return parseFloat(s.replace(',','.'));
+  return parseFloat(s);
+}
+
+let bd = [];
+let usedSheet = null;
+
+function setStatus(msg){
+  document.getElementById('statusMsg').textContent = msg;
+}
+
+function setSheetName(name){
+  usedSheet = name;
+  document.getElementById('sheetName').textContent = name || 'nenhuma';
+}
+
+// tenta carregar uma aba específica e retorna promise com objeto {ok, json, cols, rows}
+function fetchSheet(sheetName){
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  return fetch(url).then(r => r.text()).then(text => {
+    try{
+      const json = JSON.parse(text.substring(47).slice(0,-2));
+      const cols = json.table.cols || [];
+      const rows = json.table.rows || [];
+      return {ok:true, json, cols, rows};
+    }catch(e){
+      return {ok:false, error:e.toString()};
     }
+  }).catch(err => ({ok:false, error: err.toString()}));
+}
 
-    // tenta parsear número independentemente de vírgula/ponto
-    function parseNumberFlexible(val){
-      if(val === null || val === undefined) return NaN;
-      if(typeof val === 'number') return val;
-      const s = String(val).trim();
-      if(s === '') return NaN;
-      // se tiver vírgula e ponto, tentar quitar milhares (ex: 1.234,56)
-      if(s.indexOf(',')>-1 && s.indexOf('.')>-1){
-        // assume formato pt-BR: remove pontos, troca vírgula por ponto
-        return parseFloat(s.replace(/\./g,'').replace(',', '.'));
-      }
-      // se só vírgula
-      if(s.indexOf(',')>-1){
-        return parseFloat(s.replace(',', '.'));
-      }
-      return parseFloat(s);
+function headerLooksLikeBD(cols){
+  // verifica se há pelo menos uma coluna com nomes plausíveis: descricao, categoria ou calorias
+  const labels = cols.map(c => normalizeLabel(c.label || c.id || ''));
+  const hasDesc = labels.some(l => ['descricao','descrição','alimento','nome','item','description'].includes(l));
+  const hasCat = labels.some(l => ['categoria','tipo','classificacao','classificação','category','type'].includes(l));
+  const hasCal = labels.some(l => l.includes('cal') || l.includes('kcal') || l.includes('caloria'));
+  // consideramos ok se pelo menos descrição + (categoria ou cal) existirem
+  return hasDesc && (hasCat || hasCal);
+}
+
+async function tryFindBD(){
+  setStatus('Procurando a aba correta na planilha...');
+  for(const s of SHEET_CANDIDATES){
+    setStatus(`testando aba "${s}" ...`);
+    const res = await fetchSheet(s);
+    if(!res.ok) continue;
+    if(res.cols && res.cols.length > 0 && headerLooksLikeBD(res.cols)){
+      setStatus(`Encontrada aba plausível: "${s}"`);
+      setSheetName(s);
+      processBDJson(res.json);
+      return;
     }
+  }
+  // se não encontrou, tentar a primeira aba publicada automaticamente (se existir)
+  setStatus('Nenhuma aba padrão encontrada automaticamente. Tentando primeira aba disponível...');
+  // tentar "Sheet1" como fallback (ou a primeira do documento)
+  const fallback = await fetchSheet('Sheet1');
+  if(fallback.ok && fallback.cols && fallback.cols.length>0){
+    setSheetName('Sheet1 (fallback)');
+    processBDJson(fallback.json);
+    return;
+  }
+  setStatus('Não foi possível localizar uma aba BD automaticamente. Verifique o nome da aba e tente renomeá-la para "BD" ou "Alimentos".');
+  alert('Não consegui localizar a aba de BD na sua planilha. Verifique o nome da aba (ex: "BD" ou "Alimentos") e tente novamente.');
+}
 
-    // busca a coluna pelo conjunto de possíveis nomes
-    function findHeaderIndex(possibles){
-      for(const p of possibles){
-        const np = normalizeLabel(p);
-        if(np in headerMap) return headerMap[np];
-      }
-      return -1;
+// processa o json gviz e popula bd[]
+function processBDJson(json){
+  const cols = json.table.cols || [];
+  const rows = json.table.rows || [];
+  // montar header map nameNormalized -> index
+  const headerMap = {};
+  cols.forEach((c,i) => headerMap[normalizeLabel(c.label || c.id || '')] = i);
+
+  // possíveis nomes
+  const descricaoCandidates = ['descricao','descrição','alimento','nome','item','description'];
+  const categoriaCandidates = ['categoria','tipo','classificacao','classificação','category','type'];
+  const calCandidates = ['caloriasporgrama','caloriaporgrama','calorias','caloria','kcal','cal'];
+  const unidadeCandidates = ['unidade','unidade_medida','unidadedemedida','unit','medida','u'];
+  const porcaoCandidates = ['peso_porcao','pesoporcao','porcao','porcao_gramas','peso'];
+
+  function findHeaderIndex(possibles){
+    for(const p of possibles){
+      const np = normalizeLabel(p);
+      if(np in headerMap) return headerMap[np];
     }
+    return -1;
+  }
 
-    fetch(BD_URL)
-      .then(r => r.text())
-      .then(text => {
-        // remover cabeçalho do Gviz
-        const json = JSON.parse(text.substring(47).slice(0,-2));
-        const cols = json.table.cols || [];
-        // montar headerMap
-        headerMap = {};
-        cols.forEach((c,i) => {
-          const label = c.label || '';
-          headerMap[normalizeLabel(label)] = i;
-        });
+  const idxDesc = findHeaderIndex(descricaoCandidates);
+  const idxCat = findHeaderIndex(categoriaCandidates);
+  const idxCal = findHeaderIndex(calCandidates);
+  const idxUni = findHeaderIndex(unidadeCandidates);
+  const idxPorc = findHeaderIndex(porcaoCandidates);
 
-        // possíveis nomes (port/eng) para cada campo
-        const descricaoCandidates = ['descricao','descrição','descricaoalimento','alimento','nome','description','item'];
-        const categoriaCandidates = ['categoria','tipo','classificacao','type','category'];
-        const calCandidates = ['caloriasporgrama','caloriaporgrama','calorias','caloria','calorias_g','cal_por_g','caloriaporunidade','caloriasunidade','calporunidade','cal'];
-        const unidadeCandidates = ['unidade','unidade_medida','unidadedemedida','unit','unidad','medida'];
-        const porcaoCandidates = ['peso_porcao','pesoporcao','peso_da_porção','porcao','porcao_peso','porcao_gramas'];
+  bd = rows.map(r => {
+    const cell = i => r.c && r.c[i] ? r.c[i] : null;
+    const getVal = i => {
+      const c = cell(i);
+      if(!c) return null;
+      if(c.v !== undefined && c.v !== null) return c.v;
+      if(c.f !== undefined && c.f !== null) return c.f;
+      return null;
+    };
+    const descricao = idxDesc>=0 ? String(getVal(idxDesc)||'') : '';
+    const categoria = idxCat>=0 ? String(getVal(idxCat)||'') : '';
+    const cal_raw = idxCal>=0 ? getVal(idxCal) : null;
+    const cal_por_unidade = parseNumberFlexible(cal_raw);
+    const unidade = idxUni>=0 ? String(getVal(idxUni)||'') : '';
+    const porcao = idxPorc>=0 ? parseNumberFlexible(getVal(idxPorc)) : null;
 
-        const idxDesc = findHeaderIndex(descricaoCandidates);
-        const idxCat = findHeaderIndex(categoriaCandidates);
-        const idxCal = findHeaderIndex(calCandidates);
-        const idxUni = findHeaderIndex(unidadeCandidates);
-        const idxPorc = findHeaderIndex(porcaoCandidates);
+    return {
+      descricao: descricao.trim(),
+      categoria: categoria.trim(),
+      cal_por_unidade: isNaN(cal_por_unidade) ? null : cal_por_unidade,
+      unidade: unidade.trim(),
+      porcao: isNaN(porcao) ? null : porcao
+    };
+  }).filter(x => x.descricao);
 
-        // montar bd
-        bd = (json.table.rows || []).map(r => {
-          const cell = i => r.c && r.c[i] ? r.c[i] : null;
-          // preferir .v (valor) quando possível, senão usar .f (formatado)
-          const getVal = i => {
-            const c = cell(i);
-            if(!c) return null;
-            if(c.v !== undefined && c.v !== null) return c.v;
-            if(c.f !== undefined && c.f !== null) return c.f;
-            return null;
-          };
+  if(bd.length === 0){
+    setStatus('A aba escolhida está vazia ou sem colunas reconhecíveis.');
+    alert('A aba encontrada parece vazia ou sem cabeçalho reconhecível. Verifique a aba BD.');
+    return;
+  }
 
-          const descricao = idxDesc >= 0 ? String(getVal(idxDesc) || '') : '';
-          const categoria = idxCat >= 0 ? String(getVal(idxCat) || '') : '';
-          let cal_raw = idxCal >= 0 ? getVal(idxCal) : null;
-          // se cal_raw for string formatada com vírgula, parsear
-          const cal_por_unidade = parseNumberFlexible(cal_raw);
-          const unidade = idxUni >= 0 ? String(getVal(idxUni) || '') : '';
-          const porcao = idxPorc >= 0 ? parseNumberFlexible(getVal(idxPorc)) : NaN;
+  setStatus(`BD carregado: ${bd.length} linhas.`);
+  carregarCategorias();
+}
 
-          return {
-            descricao: descricao,
-            categoria: categoria,
-            cal_por_unidade: isNaN(cal_por_unidade) ? null : cal_por_unidade,
-            unidade: unidade,
-            porcao: isNaN(porcao) ? null : porcao
-          };
-        }).filter(x => x.descricao); // ignorar linhas em branco
+function carregarCategorias(){
+  const catSelect = document.getElementById('categoria');
+  catSelect.innerHTML = '';
+  const categorias = [...new Set(bd.map(i => (i.categoria||'').trim()).filter(Boolean))];
+  if(categorias.length === 0){
+    categorias.push('Alimento');
+  }
+  categorias.forEach(c => {
+    const o = document.createElement('option'); o.text = c; catSelect.add(o);
+  });
+  catSelect.onchange = carregarAlimentos;
+  carregarAlimentos();
+}
 
-        carregarCategorias();
-      })
-      .catch(err => {
-        console.error(err);
-        alert("Erro ao carregar BD. Veja console do navegador para detalhes.");
-      });
+function carregarAlimentos(){
+  const cat = document.getElementById('categoria').value;
+  const ali = document.getElementById('alimento');
+  ali.innerHTML = '';
+  let list = bd.filter(i => {
+    if(!cat) return true;
+    return normalizeLabel(i.categoria||'') === normalizeLabel(cat||'');
+  });
+  if(list.length === 0) list = bd.slice(0,100); // fallback mostrar primeiros 100
+  list.forEach(a => {
+    const o = document.createElement('option');
+    const label = a.descricao + (a.unidade ? ` (${a.unidade})` : '');
+    o.text = label;
+    ali.add(o);
+  });
+}
 
-    function carregarCategorias(){
-      const catSelect = document.getElementById("categoria");
-      catSelect.innerHTML = "";
-      const categorias = [...new Set(bd.map(i => (i.categoria||'').trim()).filter(Boolean))];
-      if(categorias.length === 0){
-        // fallback: se não houver categoria, agrupar tudo em "Alimento"
-        categorias.push('Alimento');
-      }
-      categorias.forEach(c => {
-        const o = document.createElement("option");
-        o.text = c;
-        catSelect.add(o);
-      });
-      catSelect.onchange = carregarAlimentos;
-      carregarAlimentos();
-    }
+function salvar(){
+  const data = document.getElementById('data').value;
+  const refeicao = document.getElementById('refeicao').value;
+  const categoria = document.getElementById('categoria').value;
+  const alimento = document.getElementById('alimento').value;
+  const quantidade = document.getElementById('quantidade').value;
+  alert('Registro salvo (simulação):\\n' + data + ' | ' + refeicao + ' | ' + categoria + ' | ' + alimento + ' | ' + quantidade);
+}
 
-    function carregarAlimentos(){
-      const cat = document.getElementById("categoria").value;
-      const aliSelect = document.getElementById("alimento");
-      aliSelect.innerHTML = "";
-      const list = bd.filter(i => {
-        if(!cat) return true;
-        // comparar sem acento / case-insensitive
-        const a = normalizeLabel(i.categoria||'');
-        const b = normalizeLabel(cat||'');
-        return a === b;
-      });
-      if(list.length === 0 && bd.length>0){
-        // se não encontrou alimentos pela categoria, mostrar todos como fallback
-        list.push(...bd);
-      }
-      list.forEach(a => {
-        const o = document.createElement("option");
-        o.text = a.descricao + (a.unidade ? ` (${a.unidade})` : '');
-        aliSelect.add(o);
-      });
-    }
-
-    function salvar(){
-      const data = document.getElementById("data").value;
-      const refeicao = document.getElementById("refeicao").value;
-      const categoria = document.getElementById("categoria").value;
-      const alimentoText = document.getElementById("alimento").value;
-      const quantidade = document.getElementById("quantidade").value;
-
-      // mostrar preview simples (depois ligamos ao histórico)
-      alert(
-        "✅ Registro salvo (simulação)\n\n" +
-        "Data: " + data + "\n" +
-        "Refeição: " + refeicao + "\n" +
-        "Categoria: " + categoria + "\n" +
-        "Alimento: " + alimentoText + "\n" +
-        "Quantidade: " + quantidade
-      );
-    }
-
-    document.getElementById("data").valueAsDate = new Date();
-  </script>
+document.getElementById('data').valueAsDate = new Date();
+tryFindBD();
+</script>
 </body>
 </html>
