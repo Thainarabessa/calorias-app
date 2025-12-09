@@ -2,10 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Calorias App</title>
-
+<title>Controle de Calorias</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-
 <style>
 body{
   font-family:-apple-system,BlinkMacSystemFont,sans-serif;
@@ -51,12 +49,10 @@ hr{
 }
 </style>
 </head>
-
 <body>
 
 <h1>🍎 Controle de Calorias</h1>
 
-<!-- RESUMO -->
 <div class="card resumo">
   <p><strong>Total diário:</strong> 1510 kcal</p>
   <p>✅ Consumidas: <span id="consumidas">0</span></p>
@@ -67,9 +63,7 @@ hr{
   <p>🥑 Gorduras: <span id="gord">0</span></p>
 </div>
 
-<!-- FORMULÁRIO -->
 <div class="card">
-
 <label>Data</label>
 <input type="date" id="data">
 
@@ -81,116 +75,109 @@ hr{
   <option>Janta</option>
 </select>
 
-<label>Tipo nutricional</label>
-<select id="tipo" onchange="carregarAlimentos()">
-  <option value="">Selecione</option>
-</select>
+<label>Categoria</label>
+<select id="categoria" onchange="carregarAlimentos()"></select>
 
 <label>Alimento</label>
-<select id="alimento" onchange="atualizarUnidade()"></select>
+<select id="alimento"></select>
 
 <label id="lblQtd">Quantidade</label>
 <input type="number" id="qtd" placeholder="Informe a quantidade">
 
 <button onclick="salvar()">Salvar</button>
-
 </div>
 
 <script>
-/* CONFIG */
 const TOTAL_DIARIO = 1510;
+let total = 0, prot = 0, carb = 0, gord = 0;
+
+const SHEET_ID = "1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif";
+const URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=BD`;
+
 let bd = [];
 
-let total = 0;
-let prot = 0;
-let carb = 0;
-let gord = 0;
-
-/* DATA PADRÃO = HOJE */
-document.getElementById("data").valueAsDate = new Date();
-
-/* BUSCA DA ABA BD (GOOGLE SHEETS) */
-fetch("https://opensheet.elk.sh/1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif/BD")
-.then(r => r.json())
-.then(dados => {
-  bd = dados.map(l => ({
-    descricao: l["descricao"],                          // CORRIGIDO (sem acento)
-    cal: Number(String(l["calorias por grama"]).replace(",", ".")), // garante número
-    und: l["und"],
-    tipo: l["tipo"]
-  }));
-  carregarTipos();
-});
-
-/* CARREGA TIPOS NUTRICIONAIS */
-function carregarTipos(){
-  const tipos = [...new Set(bd.map(a => a.tipo))];
-  const select = document.getElementById("tipo");
-
-  tipos.forEach(t => {
-    const opt = document.createElement("option");
-    opt.value = t;
-    opt.textContent = t;
-    select.appendChild(opt);
-  });
+function toNumber(v){
+  if(typeof v === "number") return v;
+  return Number(String(v).replace(",", ".")) || 0;
 }
 
-/* ALIMENTOS POR TIPO */
+fetch(URL)
+.then(r => r.text())
+.then(t => {
+  const j = JSON.parse(t.substring(47).slice(0,-2));
+  const rows = j.table.rows;
+
+  bd = rows.map(r => ({
+    descricao: r.c[0]?.v || "",
+    cal: toNumber(r.c[1]?.v),
+    peso: toNumber(r.c[2]?.v),
+    und: r.c[3]?.v || "",
+    tipo: r.c[4]?.v || ""
+  })).filter(a => a.descricao);
+
+  carregarCategorias();
+});
+
+function carregarCategorias(){
+  const s = document.getElementById("categoria");
+  s.innerHTML = "";
+  [...new Set(bd.map(a => a.tipo))].forEach(t => {
+    const o = document.createElement("option");
+    o.value = t;
+    o.textContent = t;
+    s.appendChild(o);
+  });
+  carregarAlimentos();
+}
+
 function carregarAlimentos(){
-  const tipo = document.getElementById("tipo").value;
-  const select = document.getElementById("alimento");
-  select.innerHTML = "";
+  const tipo = document.getElementById("categoria").value;
+  const s = document.getElementById("alimento");
+  s.innerHTML = "";
 
   bd.filter(a => a.tipo === tipo).forEach(a => {
-    const opt = document.createElement("option");
-    opt.textContent = a.descricao;
-    opt.dataset.und = a.und;
-    opt.dataset.cal = a.cal;
-    select.appendChild(opt);
+    const o = document.createElement("option");
+    o.value = a.descricao;
+    o.textContent = `${a.descricao} (${a.und})`;
+    s.appendChild(o);
   });
 
   atualizarUnidade();
 }
 
-/* UNIDADE DINÂMICA */
 function atualizarUnidade(){
   const sel = document.getElementById("alimento");
   if(!sel.options.length) return;
-  const und = sel.options[sel.selectedIndex].dataset.und;
-  document.getElementById("lblQtd").innerText =
-    "Quantidade (" + und + ")";
+  const und = sel.options[sel.selectedIndex].text.match(/\((.*?)\)/)?.[1] || "";
+  document.getElementById("lblQtd").innerText = "Quantidade (" + und + ")";
 }
 
-/* SALVAR */
 function salvar(){
-  const tipoSel = document.getElementById("tipo").value;
   const qtd = Number(document.getElementById("qtd").value);
-  const sel = document.getElementById("alimento");
+  const nome = document.getElementById("alimento").value;
+  if(!qtd || qtd <= 0) return alert("Informe quantidade válida");
 
-  if(!tipoSel || qtd <= 0 || sel.selectedIndex < 0){
-    alert("Preencha todos os campos corretamente");
-    return;
-  }
+  const alimento = bd.find(a => a.descricao === nome);
+  if(!alimento) return alert("Alimento não encontrado");
 
-  const alimento = bd.filter(a => a.tipo === tipoSel)[sel.selectedIndex];
   const calorias = qtd * alimento.cal;
-
   total += calorias;
 
-  if(tipoSel.includes("PROTE")) prot += calorias;
-  else if(tipoSel.includes("CARBO")) carb += calorias;
-  else if(tipoSel.includes("GORD")) gord += calorias;
+  const tipoUpper = alimento.tipo.toUpperCase();
+  if(tipoUpper.includes("PROTE")) prot += calorias;
+  if(tipoUpper.includes("CARBO")) carb += calorias;
+  if(tipoUpper.includes("GORD")) gord += calorias;
 
   document.getElementById("consumidas").innerText = total.toFixed(1);
-  document.getElementById("restantes").innerText =
-    (TOTAL_DIARIO - total).toFixed(1);
-
+  document.getElementById("restantes").innerText = (TOTAL_DIARIO - total).toFixed(1);
   document.getElementById("prot").innerText = prot.toFixed(1);
   document.getElementById("carb").innerText = carb.toFixed(1);
   document.getElementById("gord").innerText = gord.toFixed(1);
 
   document.getElementById("qtd").value = "";
 }
+
+document.getElementById("data").valueAsDate = new Date();
 </script>
 
 </body>
