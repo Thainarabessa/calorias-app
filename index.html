@@ -1,41 +1,55 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Calorias App</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 20px;
-    }
-    h1 {
-      text-align: center;
-    }
-    .card {
-      background: #fff;
-      padding: 15px;
-      margin-bottom: 15px;
-      border-radius: 8px;
-    }
-    label {
-      display: block;
-      margin-top: 10px;
-    }
-    select, input, button {
-      width: 100%;
-      padding: 8px;
-      margin-top: 5px;
-    }
-    button {
-      background: #e91e63;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-size: 16px;
-      margin-top: 15px;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>Controle de Calorias</title>
+
+<style>
+body{
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  background:#f4f4f4;
+  padding:16px;
+  font-size:18px;
+}
+
+h1{
+  text-align:center;
+  font-size:24px;
+}
+
+.card{
+  background:#fff;
+  padding:16px;
+  margin-bottom:16px;
+  border-radius:12px;
+}
+
+label{
+  margin-top:12px;
+  display:block;
+  font-weight:600;
+}
+
+select,input,button{
+  width:100%;
+  padding:12px;
+  font-size:18px;
+  margin-top:6px;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+
+button{
+  background:#e91e63;
+  color:#fff;
+  border:none;
+  font-size:20px;
+  margin-top:20px;
+}
+.resumo p{
+  margin:6px 0;
+}
+</style>
 </head>
 
 <body>
@@ -43,104 +57,124 @@
 <h1>🍎 Controle de Calorias</h1>
 
 <!-- RESUMO -->
-<div class="card">
-  <strong>Total diário:</strong> 1510 kcal<br><br>
-  ✅ Consumidas: <strong><span id="consumidas">0</span></strong> kcal<br>
-  🔥 Restantes: <strong><span id="restantes">1510</span></strong> kcal
+<div class="card resumo">
+  <p><strong>Total diário:</strong> 1510 kcal</p>
+  <p>✅ Consumidas: <span id="totalConsumido">0</span></p>
+  <p>🔥 Restantes: <span id="totalRestante">1510</span></p>
+  <hr>
+  <p>🥩 Proteínas: <span id="prot">0</span> kcal</p>
+  <p>🍚 Carboidratos: <span id="carb">0</span> kcal</p>
+  <p>🥑 Gorduras: <span id="gord">0</span> kcal</p>
 </div>
 
-<!-- FORMULÁRIO -->
+<!-- FORM -->
 <div class="card">
-  <label>Tipo de alimento</label>
-  <select id="categoria" onchange="carregarAlimentos()">
-    <option value="">Selecione</option>
-  </select>
 
-  <label>Alimento</label>
-  <select id="alimento"></select>
+<label>Data</label>
+<input type="date" id="data">
 
-  <label>Quantidade (gramas)</label>
-  <input type="number" id="qtd" placeholder="Ex: 100">
+<label>Refeição</label>
+<select id="refeicao">
+  <option>Café da manhã</option>
+  <option>Almoço</option>
+  <option>Lanche</option>
+  <option>Janta</option>
+</select>
 
-  <button onclick="salvar()">Salvar</button>
+<label>Tipo nutricional</label>
+<select id="tipo" onchange="carregarAlimentos()">
+  <option value="">Selecione</option>
+</select>
+
+<label>Alimento</label>
+<select id="alimento" onchange="atualizarUnidade()"></select>
+
+<label id="lblQtd">Quantidade</label>
+<input type="number" id="qtd">
+
+<button onclick="salvar()">Salvar</button>
+
 </div>
 
 <script>
-/* CONFIGURAÇÃO */
-const TOTAL_DIARIO = 1510;
-let caloriasConsumidasHoje = 0;
+const TOTAL = 1510;
 let bd = [];
 
-/* BUSCAR DADOS DO GOOGLE SHEETS */
+let total = 0;
+let prot = 0;
+let carb = 0;
+let gord = 0;
+
+document.getElementById("data").valueAsDate = new Date();
+
 fetch("https://opensheet.elk.sh/1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif/BD")
-  .then(res => res.json())
-  .then(dados => {
-    bd = dados.map(l => ({
-      descricao: l["descrição"],
-      calorias: Number(l["calorias por grama"]),
-      peso: l["peso"],
-      und: l["und"],
-      tipo: l["tipo"]
-    }));
+.then(r=>r.json())
+.then(d=>{
+  bd = d.map(l=>({
+    descricao:l["descrição"],
+    cal:Number(l["calorias por grama"]),
+    und:l["und"],
+    tipo:l["tipo"]
+  }));
+  carregarTipos();
+});
 
-    carregarCategorias();
-  });
-
-/* CATEGORIAS */
-function carregarCategorias(){
-  const categorias = [...new Set(bd.map(a => a.tipo))];
-  const select = document.getElementById("categoria");
-  categorias.forEach(c => {
-    const opt = document.createElement("option");
-    opt.value = c;
-    opt.textContent = c;
-    select.appendChild(opt);
+function carregarTipos(){
+  const tipos=[...new Set(bd.map(a=>a.tipo))];
+  const s=document.getElementById("tipo");
+  tipos.forEach(t=>{
+    let o=document.createElement("option");
+    o.value=t;
+    o.text=t;
+    s.appendChild(o);
   });
 }
 
-/* ALIMENTOS */
 function carregarAlimentos(){
-  const categoria = document.getElementById("categoria").value;
-  const select = document.getElementById("alimento");
-  select.innerHTML = "";
-
-  bd.filter(a => a.tipo === categoria).forEach(a => {
-    const opt = document.createElement("option");
-    opt.textContent = a.descricao + " (" + a.und + ")";
-    select.appendChild(opt);
+  const tipo=document.getElementById("tipo").value;
+  const s=document.getElementById("alimento");
+  s.innerHTML="";
+  bd.filter(a=>a.tipo===tipo).forEach(a=>{
+    let o=document.createElement("option");
+    o.text=a.descricao;
+    o.dataset.und=a.und;
+    s.appendChild(o);
   });
+  atualizarUnidade();
 }
 
-/* SALVAR */
-function salvar(){
-  const categoria = document.getElementById("categoria").value;
-  const qtd = Number(document.getElementById("qtd").value);
-  const index = document.getElementById("alimento").selectedIndex;
+function atualizarUnidade(){
+  const sel=document.getElementById("alimento");
+  if(!sel.options.length) return;
+  const und=sel.options[sel.selectedIndex].dataset.und;
+  document.getElementById("lblQtd").innerText="Quantidade ("+und+")";
+}
 
-  if(!categoria || index < 0 || !qtd || qtd <= 0){
-    alert("Preencha todos os campos corretamente");
+function salvar(){
+  const tipo=document.getElementById("tipo").value;
+  const qtd=Number(document.getElementById("qtd").value);
+  const idx=document.getElementById("alimento").selectedIndex;
+
+  if(!tipo || qtd<=0 || idx<0){
+    alert("Preencha tudo corretamente");
     return;
   }
 
-  const alimentosFiltrados = bd.filter(a => a.tipo === categoria);
-  const alimento = alimentosFiltrados[index];
+  const alimento=bd.filter(a=>a.tipo===tipo)[idx];
+  const cal=qtd*alimento.cal;
 
-  const calorias = qtd * alimento.calorias;
-  caloriasConsumidasHoje += calorias;
+  total+=cal;
+  if(tipo.toLowerCase().includes("prote")) prot+=cal;
+  if(tipo.toLowerCase().includes("carb")) carb+=cal;
+  if(tipo.toLowerCase().includes("gord")) gord+=cal;
 
-  document.getElementById("consumidas").innerText =
-    caloriasConsumidasHoje.toFixed(1);
+  document.getElementById("totalConsumido").innerText=total.toFixed(1);
+  document.getElementById("totalRestante").innerText=(TOTAL-total).toFixed(1);
+  document.getElementById("prot").innerText=prot.toFixed(1);
+  document.getElementById("carb").innerText=carb.toFixed(1);
+  document.getElementById("gord").innerText=gord.toFixed(1);
 
-  document.getElementById("restantes").innerText =
-    (TOTAL_DIARIO - caloriasConsumidasHoje).toFixed(1);
-
-  document.getElementById("qtd").value = "";
-
-  alert(
-    "✅ Salvo!\n\n" +
-    alimento.descricao +
-    "\nCalorias: " + calorias.toFixed(1) + " kcal"
-  );
+  document.getElementById("qtd").value="";
 }
 </script>
 
