@@ -2,52 +2,52 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Controle de Calorias</title>
+<title>Calorias App</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
 body{
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-  background:#f4f4f4;
+  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+  background:#f2f2f2;
   padding:16px;
   font-size:18px;
 }
-
 h1{
   text-align:center;
-  font-size:24px;
+  font-size:26px;
 }
-
 .card{
   background:#fff;
   padding:16px;
   margin-bottom:16px;
-  border-radius:12px;
+  border-radius:14px;
 }
-
 label{
-  margin-top:12px;
   display:block;
+  margin-top:12px;
   font-weight:600;
 }
-
 select,input,button{
   width:100%;
   padding:12px;
-  font-size:18px;
   margin-top:6px;
-  border-radius:8px;
+  font-size:18px;
+  border-radius:10px;
   border:1px solid #ccc;
 }
-
 button{
   background:#e91e63;
   color:#fff;
   border:none;
-  font-size:20px;
   margin-top:20px;
+  font-size:20px;
 }
 .resumo p{
   margin:6px 0;
+}
+hr{
+  margin:10px 0;
 }
 </style>
 </head>
@@ -59,15 +59,15 @@ button{
 <!-- RESUMO -->
 <div class="card resumo">
   <p><strong>Total diário:</strong> 1510 kcal</p>
-  <p>✅ Consumidas: <span id="totalConsumido">0</span></p>
-  <p>🔥 Restantes: <span id="totalRestante">1510</span></p>
+  <p>✅ Consumidas: <span id="consumidas">0</span></p>
+  <p>🔥 Restantes: <span id="restantes">1510</span></p>
   <hr>
-  <p>🥩 Proteínas: <span id="prot">0</span> kcal</p>
-  <p>🍚 Carboidratos: <span id="carb">0</span> kcal</p>
-  <p>🥑 Gorduras: <span id="gord">0</span> kcal</p>
+  <p>🥩 Proteínas: <span id="prot">0</span></p>
+  <p>🍚 Carboidratos: <span id="carb">0</span></p>
+  <p>🥑 Gorduras: <span id="gord">0</span></p>
 </div>
 
-<!-- FORM -->
+<!-- FORMULÁRIO -->
 <div class="card">
 
 <label>Data</label>
@@ -90,14 +90,15 @@ button{
 <select id="alimento" onchange="atualizarUnidade()"></select>
 
 <label id="lblQtd">Quantidade</label>
-<input type="number" id="qtd">
+<input type="number" id="qtd" placeholder="Informe a quantidade">
 
 <button onclick="salvar()">Salvar</button>
 
 </div>
 
 <script>
-const TOTAL = 1510;
+/* CONFIG */
+const TOTAL_DIARIO = 1510;
 let bd = [];
 
 let total = 0;
@@ -105,76 +106,88 @@ let prot = 0;
 let carb = 0;
 let gord = 0;
 
+/* DATA PADRÃO = HOJE */
 document.getElementById("data").valueAsDate = new Date();
 
+/* BUSCA DA ABA BD */
 fetch("https://opensheet.elk.sh/1YTMNBLzRi5p-uGSPba2FXsoxMeIWyPif/BD")
-.then(r=>r.json())
-.then(d=>{
-  bd = d.map(l=>({
-    descricao:l["descrição"],
-    cal:Number(l["calorias por grama"]),
-    und:l["und"],
-    tipo:l["tipo"]
+.then(r => r.json())
+.then(dados => {
+  bd = dados.map(l => ({
+    descricao: l["descrição"],
+    cal: Number(l["calorias por grama"]),
+    und: l["und"],
+    tipo: l["tipo"]
   }));
   carregarTipos();
 });
 
+/* TIPOS NUTRICIONAIS */
 function carregarTipos(){
-  const tipos=[...new Set(bd.map(a=>a.tipo))];
-  const s=document.getElementById("tipo");
-  tipos.forEach(t=>{
-    let o=document.createElement("option");
-    o.value=t;
-    o.text=t;
-    s.appendChild(o);
+  const tipos = [...new Set(bd.map(a => a.tipo))];
+  const select = document.getElementById("tipo");
+  tipos.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t;
+    opt.textContent = t;
+    select.appendChild(opt);
   });
 }
 
+/* ALIMENTOS POR TIPO */
 function carregarAlimentos(){
-  const tipo=document.getElementById("tipo").value;
-  const s=document.getElementById("alimento");
-  s.innerHTML="";
-  bd.filter(a=>a.tipo===tipo).forEach(a=>{
-    let o=document.createElement("option");
-    o.text=a.descricao;
-    o.dataset.und=a.und;
-    s.appendChild(o);
+  const tipo = document.getElementById("tipo").value;
+  const select = document.getElementById("alimento");
+  select.innerHTML = "";
+
+  bd.filter(a => a.tipo === tipo).forEach(a => {
+    const opt = document.createElement("option");
+    opt.textContent = a.descricao;
+    opt.dataset.und = a.und;
+    select.appendChild(opt);
   });
+
   atualizarUnidade();
 }
 
+/* UNIDADE DINÂMICA */
 function atualizarUnidade(){
-  const sel=document.getElementById("alimento");
+  const sel = document.getElementById("alimento");
   if(!sel.options.length) return;
-  const und=sel.options[sel.selectedIndex].dataset.und;
-  document.getElementById("lblQtd").innerText="Quantidade ("+und+")";
+  const und = sel.options[sel.selectedIndex].dataset.und;
+  document.getElementById("lblQtd").innerText =
+    "Quantidade (" + und + ")";
 }
 
+/* SALVAR */
 function salvar(){
-  const tipo=document.getElementById("tipo").value;
-  const qtd=Number(document.getElementById("qtd").value);
-  const idx=document.getElementById("alimento").selectedIndex;
+  const tipo = document.getElementById("tipo").value.toLowerCase();
+  const qtd = Number(document.getElementById("qtd").value);
+  const idx = document.getElementById("alimento").selectedIndex;
 
-  if(!tipo || qtd<=0 || idx<0){
-    alert("Preencha tudo corretamente");
+  if(!tipo || qtd <= 0 || idx < 0){
+    alert("Preencha todos os campos corretamente");
     return;
   }
 
-  const alimento=bd.filter(a=>a.tipo===tipo)[idx];
-  const cal=qtd*alimento.cal;
+  const alimento = bd.filter(a => a.tipo.toLowerCase() === tipo)[idx];
+  const calorias = qtd * alimento.cal;
 
-  total+=cal;
-  if(tipo.toLowerCase().includes("prote")) prot+=cal;
-  if(tipo.toLowerCase().includes("carb")) carb+=cal;
-  if(tipo.toLowerCase().includes("gord")) gord+=cal;
+  total += calorias;
 
-  document.getElementById("totalConsumido").innerText=total.toFixed(1);
-  document.getElementById("totalRestante").innerText=(TOTAL-total).toFixed(1);
-  document.getElementById("prot").innerText=prot.toFixed(1);
-  document.getElementById("carb").innerText=carb.toFixed(1);
-  document.getElementById("gord").innerText=gord.toFixed(1);
+  if(tipo.includes("prote")) prot += calorias;
+  else if(tipo.includes("carb")) carb += calorias;
+  else if(tipo.includes("gord")) gord += calorias;
 
-  document.getElementById("qtd").value="";
+  document.getElementById("consumidas").innerText = total.toFixed(1);
+  document.getElementById("restantes").innerText =
+    (TOTAL_DIARIO - total).toFixed(1);
+
+  document.getElementById("prot").innerText = prot.toFixed(1);
+  document.getElementById("carb").innerText = carb.toFixed(1);
+  document.getElementById("gord").innerText = gord.toFixed(1);
+
+  document.getElementById("qtd").value = "";
 }
 </script>
 
